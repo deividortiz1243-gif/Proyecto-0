@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TurisPlaY - Garzón, Huila</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <header>
+    <h1>TurisPlaY 🌿</h1>
+    <p>Descubre y reserva los mejores sitios turísticos de Garzón, Huila</p>
+  </header>
+
+  <main class="container">
+    <!-- SECCIÓN DE SITIOS TURÍSTICOS -->
+    <section>
+      <h2>Sitios Turísticos</h2>
+      <div id="contenedor-sitios" class="grid-sitios">
+        <p>Cargando sitios desde la base de datos...</p>
+      </div>
+    </section>
+
+    <!-- SECCIÓN DE FORMULARIO DE RESERVAS -->
+    <section class="form-section">
+      <h2>Hacer una Reserva</h2>
+      <form id="form-reserva">
+        <div class="form-group">
+          <label for="nombreUsuario">Nombre Completo:</label>
+          <input type="text" id="nombreUsuario" required placeholder="Ej: Nitson López">
+        </div>
+
+        <div class="form-group">
+          <label for="correo">Correo Electrónico:</label>
+          <input type="email" id="correo" required placeholder="correo@ejemplo.com">
+        </div>
+
+        <div class="form-group">
+          <label for="telefono">Teléfono:</label>
+          <input type="text" id="telefono" required placeholder="3134966228">
+        </div>
+
+        <div class="form-group">
+          <label for="lugar">Lugar Turístico:</label>
+          <input type="text" id="lugar" required placeholder="Ej: El Balcón del Huila">
+        </div>
+
+        <div class="form-group">
+          <label for="fechaReserva">Fecha de Reserva:</label>
+          <input type="date" id="fechaReserva" required>
+        </div>
+
+        <div class="form-group">
+          <label for="numeroPersonas">Número de Personas:</label>
+          <input type="number" id="numeroPersonas" min="1" value="1" required>
+        </div>
+
+        <button type="submit">Confirmar Reserva</button>
+      </form>
+      <div id="mensaje-reserva"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

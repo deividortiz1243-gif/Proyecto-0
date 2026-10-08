@@ -1,10 +1,15 @@
-// 1. Importar Mongoose
+// backend/models/Usuario.js
 const mongoose = require('mongoose');
 
 const usuarioSchema = new mongoose.Schema({
-  nombre: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true }
-});
+  nombre:   { type: String, required: true },
+  email:    { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  rol:      { 
+    type: String, 
+    enum: ['administrador', 'admin', 'cliente', 'turista'], 
+    default: 'turista' 
+  }
+}, { timestamps: true });
 
 module.exports = mongoose.model('Usuario', usuarioSchema);
