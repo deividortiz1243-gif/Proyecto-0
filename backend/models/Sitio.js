@@ -17,6 +17,10 @@ const sitioSchema = new mongoose.Schema({
     type: String,
     required: [true, 'La ubicación es obligatoria']
   },
+  servicios: {
+    type: [String],
+    default: []
+  },
   imagen: {
     type: String,
     default: ''

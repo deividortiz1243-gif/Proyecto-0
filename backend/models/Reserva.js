@@ -12,7 +12,6 @@ const reservaSchema = new mongoose.Schema({
   telefono: { 
     type: String 
   },
-  // Ahora guardamos directamente el nombre del lugar turístico
   lugar: { 
     type: String, 
     required: [true, 'El nombre del lugar turístico es obligatorio'] 
@@ -30,6 +29,10 @@ const reservaSchema = new mongoose.Schema({
     type: String, 
     enum: ['Pendiente', 'Confirmada', 'Cancelada'], 
     default: 'Pendiente' 
+  },
+  creadoPor: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Usuario' 
   }
 }, { 
   timestamps: true 
