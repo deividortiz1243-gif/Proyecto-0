@@ -1,82 +1,245 @@
+
 const express = require('express');
-const Reserva = require('../models/Reserva');
-const { verificarToken } = require('../middleware/auth');
+const mongoose = require('mongoose');
+
 const router = express.Router();
 
-// GET: Obtener todas las reservas (PROTEGIDA)
-router.get('/', verificarToken, async (req, res) => {
+const Reserva = require('../models/Reserva');
+const { verificarToken } = require('../middleware/auth');
+const verificarAdmin = require('../middleware/admin');
+
+// Obtener reservas del usuario autenticado.
+// Los administradores pueden consultar todas.
+router.get('/', verificarToken, async (req, res, next) => {
   try {
-    const reservas = await Reserva.find({ usuario: req.usuario.id })
-      .populate('usuario', 'nombre email')
-      .populate('sitio', 'nombre municipio');
+    let reservas;
+
+    if (
+      req.usuario.rol === 'admin' ||
+      req.usuario.rol === 'administrador'
+    ) {
+      reservas = await Reserva.find()
+        .populate('usuario', 'nombre email')
+        .populate('sitio', 'nombre municipio')
+        .sort({ createdAt: -1 });
+    } else {
+      reservas = await Reserva.find({
+        usuario: req.usuario.id
+      })
+        .populate('usuario', 'nombre email')
+        .populate('sitio', 'nombre municipio')
+        .sort({ createdAt: -1 });
+    }
+
     res.json(reservas);
+
   } catch (error) {
-    console.error('❌ Error al obtener reservas:', error);
-    res.status(500).json({ error: 'Error al consultar las reservas' });
+    next(error);
   }
 });
 
-// GET: Obtener reserva por ID (PROTEGIDA)
-router.get('/:id', verificarToken, async (req, res) => {
+// Consultar una reserva específica.
+router.get('/:id', verificarToken, async (req, res, next) => {
   try {
-    const reserva = await Reserva.findById(req.params.id)
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        error: 'El identificador de la reserva no es válido'
+      });
+    }
+
+    const esAdmin = ['admin', 'administrador'].includes(
+      req.usuario.rol
+    );
+
+    const filtro = { _id: id };
+
+    if (!esAdmin) {
+      filtro.usuario = req.usuario.id;
+    }
+
+    const reserva = await Reserva.findOne(filtro)
       .populate('usuario', 'nombre email')
       .populate('sitio', 'nombre municipio');
+
     if (!reserva) {
-      return res.status(404).json({ error: 'Reserva no encontrada' });
+      return res.status(404).json({
+        error: 'Reserva no encontrada'
+      });
     }
+
     res.json(reserva);
+
   } catch (error) {
-    console.error('❌ Error al consultar la reserva:', error);
-    res.status(400).json({ error: error.message });
+    next(error);
   }
 });
 
-// POST: Crear una nueva reserva (Permite frontend público o con token)
-router.post('/', async (req, res) => {
+// Crear una reserva.
+router.post('/', verificarToken, async (req, res, next) => {
   try {
-    const datosReserva = { ...req.body };
-    if (req.usuario && req.usuario.id) {
-      datosReserva.usuario = req.usuario.id;
+    const { sitio, fecha, cantidadPersonas } = req.body;
+
+    if (!sitio || !fecha || !cantidadPersonas) {
+      return res.status(400).json({
+        error: 'Debes proporcionar sitio, fecha y cantidad de personas'
+      });
     }
 
-    const nuevaReserva = await Reserva.create(datosReserva);
-    res.status(201).json(nuevaReserva);
+    if (!mongoose.isValidObjectId(sitio)) {
+      return res.status(400).json({
+        error: 'El identificador del sitio no es válido'
+      });
+    }
+
+    if (
+      !Number.isInteger(Number(cantidadPersonas)) ||
+      Number(cantidadPersonas) < 1
+    ) {
+      return res.status(400).json({
+        error: 'La cantidad de personas debe ser un número entero mayor que cero'
+      });
+    }
+
+    const fechaReserva = new Date(fecha);
+
+    if (Number.isNaN(fechaReserva.getTime())) {
+      return res.status(400).json({
+        error: 'La fecha de reserva no es válida'
+      });
+    }
+
+    const nuevaReserva = await Reserva.create({
+      usuario: req.usuario.id,
+      sitio,
+      fecha: fechaReserva,
+      cantidadPersonas: Number(cantidadPersonas)
+    });
+
+    res.status(201).json({
+      mensaje: 'Reserva realizada con éxito en TurisPlaY',
+      reserva: nuevaReserva
+    });
+
   } catch (error) {
-    console.error('❌ Error al crear reserva:', error);
-    res.status(400).json({ error: error.message });
+    next(error);
   }
 });
 
-// PUT: Actualizar reserva por ID (PROTEGIDA)
-router.put('/:id', verificarToken, async (req, res) => {
+// Actualizar una reserva.
+router.put('/:id', verificarToken, async (req, res, next) => {
   try {
-    const reservaActualizada = await Reserva.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { returnDocument: 'after' }
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        error: 'El identificador de la reserva no es válido'
+      });
+    }
+
+    const esAdmin = ['admin', 'administrador'].includes(
+      req.usuario.rol
     );
-    if (!reservaActualizada) {
-      return res.status(404).json({ error: 'Reserva no encontrada para actualizar' });
+
+    const filtro = { _id: id };
+
+    if (!esAdmin) {
+      filtro.usuario = req.usuario.id;
     }
-    res.json(reservaActualizada);
+
+    // No permitir cambiar el propietario ni modificar el estado
+    // directamente desde la cuenta de un turista.
+    const datosActualizados = {};
+
+    if (req.body.fecha !== undefined) {
+      const fecha = new Date(req.body.fecha);
+
+      if (Number.isNaN(fecha.getTime())) {
+        return res.status(400).json({
+          error: 'La fecha no es válida'
+        });
+      }
+
+      datosActualizados.fecha = fecha;
+    }
+
+    if (req.body.cantidadPersonas !== undefined) {
+      const cantidad = Number(req.body.cantidadPersonas);
+
+      if (!Number.isInteger(cantidad) || cantidad < 1) {
+        return res.status(400).json({
+          error: 'La cantidad de personas debe ser un entero mayor que cero'
+        });
+      }
+
+      datosActualizados.cantidadPersonas = cantidad;
+    }
+
+    if (esAdmin && req.body.estado !== undefined) {
+      datosActualizados.estado = req.body.estado;
+    }
+
+    const reservaActualizada = await Reserva.findOneAndUpdate(
+      filtro,
+      { $set: datosActualizados },
+      { new: true, runValidators: true }
+    );
+
+    if (!reservaActualizada) {
+      return res.status(404).json({
+        error: 'Reserva no encontrada'
+      });
+    }
+
+    res.json({
+      mensaje: 'Reserva actualizada correctamente',
+      reserva: reservaActualizada
+    });
+
   } catch (error) {
-    console.error('❌ Error al actualizar reserva:', error);
-    res.status(400).json({ error: error.message });
+    next(error);
   }
 });
 
-// DELETE: Cancelar / Eliminar reserva por ID (PROTEGIDA)
-router.delete('/:id', verificarToken, async (req, res) => {
+// Cancelar o eliminar una reserva.
+// Los turistas solo pueden cancelar las suyas.
+// Los administradores pueden eliminar cualquiera.
+router.delete('/:id', verificarToken, async (req, res, next) => {
   try {
-    const reservaEliminada = await Reserva.findByIdAndDelete(req.params.id);
-    if (!reservaEliminada) {
-      return res.status(404).json({ error: 'Reserva no encontrada' });
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        error: 'El identificador de la reserva no es válido'
+      });
     }
-    res.json({ mensaje: 'Reserva eliminada correctamente', reservaEliminada });
+
+    const esAdmin = ['admin', 'administrador'].includes(
+      req.usuario.rol
+    );
+
+    const filtro = { _id: id };
+
+    if (!esAdmin) {
+      filtro.usuario = req.usuario.id;
+    }
+
+    const reservaEliminada = await Reserva.findOneAndDelete(filtro);
+
+    if (!reservaEliminada) {
+      return res.status(404).json({
+        error: 'Reserva no encontrada'
+      });
+    }
+
+    res.json({
+      mensaje: 'Reserva eliminada correctamente',
+      reserva: reservaEliminada
+    });
+
   } catch (error) {
-    console.error('❌ Error al eliminar reserva:', error);
-    res.status(400).json({ error: error.message });
+    next(error);
   }
 });
 

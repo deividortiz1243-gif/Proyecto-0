@@ -1,15 +1,26 @@
-// Middleware: verifica que el usuario autenticado tenga el rol admin
+
+// Middleware para verificar permisos de administrador
+
 function verificarAdmin(req, res, next) {
+
+    // Comprobar que el usuario esté autenticado
     if (!req.usuario) {
-        return res.status(401).json({ error: 'Sin autenticación' });
+        return res.status(401).json({
+            error: 'Acceso denegado: Usuario no autenticado'
+        });
     }
-    
-    // Validamos 'administrador' o 'admin'
-    if (req.usuario.rol !== 'administrador' && req.usuario.rol !== 'admin') {
-        return res.status(403).json({ error: 'Acceso denegado - se requiere rol admin' });
+
+    // Comprobar que tenga rol de administrador
+    const rol = req.usuario.rol;
+
+    if (rol !== 'admin' && rol !== 'administrador') {
+        return res.status(403).json({
+            error: 'Acceso denegado: Se requieren permisos de administrador'
+        });
     }
-    
+
+    // Si cumple los requisitos, continúa
     next();
-} 
+}
 
 module.exports = verificarAdmin;

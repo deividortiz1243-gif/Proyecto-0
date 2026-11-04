@@ -1,68 +1,130 @@
-// 1. Importar dependencias
-const express = require('express');
-const bcrypt  = require('bcryptjs');
-const jwt     = require('jsonwebtoken');
-const Usuario = require('../models/Usuario');
-const router  = express.Router();
 
-// Importante: desestructuración { verificarToken }
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const Usuario = require('../models/Usuario');
+
+const router = express.Router();
+
 const { verificarToken } = require('../middleware/auth');
 
-// 2. POST /api/auth/registro - Crear cuenta nueva
+// ==========================================
+// 1. REGISTRO DE USUARIOS
+// ==========================================
+
 router.post('/registro', async (req, res) => {
   try {
-    const { nombre, email, password, departamento, municipio, rol } = req.body;
-
-    // Verificar que el email no exista ya
-    const existe = await Usuario.findOne({ email });
-    if (existe) {
-      return res.status(400).json({ error: 'El email ya está registrado' });
-    }
-
-    // Encriptar la contraseña con 10 rondas de bcrypt
-    const hash = await bcrypt.hash(password, 10);
-
-    // Guardar el usuario con la contraseña encriptada
-    const usuario = await Usuario.create({
+    const {
       nombre,
       email,
+      password,
+      departamento,
+      municipio
+    } = req.body;
+
+    // Validar campos obligatorios
+    if (!nombre || !email || !password) {
+      return res.status(400).json({
+        error: 'Nombre, email y contraseña son obligatorios'
+      });
+    }
+
+    // Validar formato básico del correo
+    const correo = email.trim().toLowerCase();
+
+    // Comprobar si el correo ya existe
+    const existe = await Usuario.findOne({ email: correo });
+
+    if (existe) {
+      return res.status(400).json({
+        error: 'El email ya está registrado'
+      });
+    }
+
+    // Encriptar contraseña
+    const hash = await bcrypt.hash(password, 10);
+
+    // Crear usuario: el rol público siempre será turista
+    const usuario = await Usuario.create({
+      nombre: nombre.trim(),
+      email: correo,
       password: hash,
       departamento: departamento || 'Huila',
       municipio: municipio || 'Garzón',
-      rol: rol || 'turista'
+      rol: 'turista'
     });
 
     res.status(201).json({
       mensaje: 'Usuario creado correctamente',
       id: usuario._id
     });
+
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    console.error('Error en registro:', err.message);
+
+    res.status(400).json({
+      error: 'No fue posible registrar el usuario'
+    });
   }
 });
 
-// 3. POST /api/auth/login - Iniciar sesión y recibir token
+
+// ==========================================
+// 2. INICIO DE SESIÓN
+// ==========================================
+
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Buscar usuario por email
-    const usuario = await Usuario.findOne({ email });
+    if (!email || !password) {
+      return res.status(400).json({
+        error: 'El email y la contraseña son obligatorios'
+      });
+    }
+
+    if (!process.env.JWT_SECRET) {
+      console.error('JWT_SECRET no está configurada');
+
+      return res.status(500).json({
+        error: 'Error de configuración del servidor'
+      });
+    }
+
+    // Buscar usuario
+    const correo = email.trim().toLowerCase();
+
+    const usuario = await Usuario.findOne({ email: correo });
+
     if (!usuario) {
-      return res.status(401).json({ error: 'Email o contraseña incorrectos' });
+      return res.status(401).json({
+        error: 'Email o contraseña incorrectos'
+      });
     }
 
-    // Comparar la contraseña con el hash guardado en Atlas
-    const valida = await bcrypt.compare(password, usuario.password);
+    // Comparar contraseña
+    const valida = await bcrypt.compare(
+      password,
+      usuario.password
+    );
+
     if (!valida) {
-      return res.status(401).json({ error: 'Email o contraseña incorrectos' });
+      return res.status(401).json({
+        error: 'Email o contraseña incorrectos'
+      });
     }
 
-    // Crear el token JWT - dura 24 horas
+    // Generar token JWT
     const token = jwt.sign(
-      { id: usuario._id, email: usuario.email, rol: usuario.rol },
+      {
+        id: usuario._id.toString(),
+        email: usuario.email,
+        rol: usuario.rol
+      },
       process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      {
+        expiresIn: '24h'
+      }
     );
 
     res.json({
@@ -71,24 +133,47 @@ router.post('/login', async (req, res) => {
       nombre: usuario.nombre,
       rol: usuario.rol
     });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error en login:', err.message);
+
+    res.status(500).json({
+      error: 'Error interno al iniciar sesión'
+    });
   }
 });
 
-// 4. GET /api/auth/perfil - Obtener perfil del usuario autenticado
+
+// ==========================================
+// 3. OBTENER PERFIL DEL USUARIO
+// ==========================================
+
 router.get('/perfil', verificarToken, async (req, res) => {
   try {
-    const usuario = await Usuario.findById(req.usuario.id).select('-password');
+    const usuario = await Usuario.findById(
+      req.usuario.id
+    ).select('-password');
+
     if (!usuario) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
+      return res.status(404).json({
+        error: 'Usuario no encontrado'
+      });
     }
 
     res.json(usuario);
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error al consultar perfil:', err.message);
+
+    res.status(500).json({
+      error: 'Error al obtener el perfil'
+    });
   }
 });
 
-// 5. Exportar el router
+
+// ==========================================
+// 4. EXPORTAR RUTAS
+// ==========================================
+
 module.exports = router;

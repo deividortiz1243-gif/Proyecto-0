@@ -1,37 +1,79 @@
+
 const jwt = require('jsonwebtoken');
 
-// Middleware para verificar que la petición incluya un token JWT válido
+// ==========================================
+// 1. VERIFICAR TOKEN JWT
+// ==========================================
+
 function verificarToken(req, res, next) {
-  // Obtener el header Authorization de la petición
-  const authHeader = req.headers['authorization'];
-  
-  // Extraer el token separando "Bearer <TOKEN>"
-  const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    return res.status(401).json({ error: 'Acceso denegado: Token de autenticación requerido' });
-  }
+    const authHeader = req.headers.authorization;
 
-  try {
-    // Verificar y decodificar el token usando la clave secreta
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    // Guardar los datos del usuario (id, email, rol) en la petición
-    req.usuario = decoded;
-    
-    next(); // Pasar a la siguiente función o ruta
-  } catch (err) {
-    res.status(403).json({ error: 'Token inválido o expirado' });
-  }
+    // Comprobar que exista el encabezado Bearer
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({
+            error: 'Acceso denegado: Token de autenticación requerido'
+        });
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    // Comprobar que exista la clave secreta
+    if (!process.env.JWT_SECRET) {
+        console.error('JWT_SECRET no está configurada');
+
+        return res.status(500).json({
+            error: 'Error de configuración del servidor'
+        });
+    }
+
+    try {
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        // Guardar los datos del usuario autenticado
+        req.usuario = decoded;
+
+        next();
+
+    } catch (error) {
+
+        return res.status(403).json({
+            error: 'Token inválido o expirado'
+        });
+
+    }
 }
 
-// Middleware opcional para restringir acciones exclusivas de administradores en TurisPlaY
+// ==========================================
+// 2. VERIFICAR SI ES ADMINISTRADOR
+// ==========================================
+
 function esAdmin(req, res, next) {
-  if (req.usuario && req.usuario.rol === 'admin') {
+
+    if (!req.usuario) {
+        return res.status(401).json({
+            error: 'Usuario no autenticado'
+        });
+    }
+
+    if (
+        req.usuario.rol !== 'admin' &&
+        req.usuario.rol !== 'administrador'
+    ) {
+        return res.status(403).json({
+            error: 'Acceso denegado: Se requieren permisos de administrador'
+        });
+    }
+
     next();
-  } else {
-    res.status(403).json({ error: 'Acceso denegado: Se requieren permisos de administrador' });
-  }
 }
 
-module.exports = { verificarToken, esAdmin };
+// ==========================================
+// 3. EXPORTAR FUNCIONES
+// ==========================================
+
+module.exports = {
+    verificarToken,
+    esAdmin
+};
