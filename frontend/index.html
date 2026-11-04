@@ -8,27 +8,56 @@
 </head>
 <body>
 
-  <header class="hero">
-    <div class="hero-content">
-      <h1>TurisPlaY </h1>
-      <p>Descubre y reserva los mejores destinos turísticos de Garzón, Huila</p>
+  <!-- ==========================================
+       HERO PRINCIPAL CON VIDEO DE FONDO Y LOGO
+       ========================================== -->
+  <header class="hero-video-container">
+    <video autoplay muted loop playsinline id="video-fondo">
+      <source src="video/Video.fondo.mp4" type="video/mp4">
+      Tu navegador no soporta videos HTML5.
+    </video>
+    <div class="hero-overlay"></div>
+
+    <div class="logo-container">
+      <div class="logo-turisplay" style="display: flex; align-items: center; gap: 10px;">
+        <img src="img/logo-turisplay.jpg.jpg" alt="TurisPlaY Logo" class="img-logo" style="width: 45px; height: 45px; border-radius: 50%; object-fit: cover;">
+        <span style="font-size: 1.5rem; font-weight: 800; color: #ffffff;">Turis<span style="color: #52b788;">PlaY</span></span>
+      </div>
+    </div>
+
+    <div class="hero-content-video">
+      <p class="hero-sub">Descubre y reserva los mejores destinos turísticos de Garzón, Huila</p>
+      <a href="#destinos-seccion" class="btn-empezar-viaje">Empezar Viaje</a>
     </div>
   </header>
 
+  <!-- ==========================================
+       CONTENIDO PRINCIPAL (DESTINOS DESDE EL BACKEND)
+       ========================================== -->
   <main class="container">
-    <section class="sitios-section">
+    <section id="destinos-seccion" class="sitios-section">
+      
       <div class="section-header">
-        <h2>Sitios Turísticos</h2>
+        <h2>Destinos Turísticos</h2>
         <p>Selecciona un destino para ver detalles y servicios disponibles</p>
       </div>
 
-      <div id="contenedor-sitios" class="grid-sitios">
-        <p class="loading-text">Cargando sitios turísticos...</p>
+      <!-- Barra de Búsqueda -->
+      <div class="buscador-container" style="margin: 20px 0 30px 0; text-align: center;">
+        <input type="text" id="input-buscar" placeholder="Escribe para buscar un sitio en Garzón..." style="width: 100%; max-width: 450px; padding: 12px 18px; border: 1px solid #ced4da; border-radius: 8px; font-size: 0.95rem; outline: none;">
       </div>
+
+      <!-- Contenedor donde app.js inyecta los sitios -->
+      <div id="contenedor-sitios" class="grid-sitios">
+        <p class="loading-text" style="grid-column: 1 / -1; text-align: center;">⏳ Cargando sitios turísticos...</p>
+      </div>
+
     </section>
   </main>
 
-  <!-- Modal Detalle -->
+  <!-- ==========================================
+       VENTANA MODAL: DETALLES
+       ========================================== -->
   <div id="modal-detalle" class="modal">
     <div class="modal-content">
       <span class="cerrar-modal" onclick="cerrarModalDetalle()">&times;</span>
@@ -36,27 +65,39 @@
     </div>
   </div>
 
-  <!-- Modal Reserva -->
+  <!-- ==========================================
+       VENTANA MODAL: RESERVAS (Con Cabaña/Almuerzo y WhatsApp)
+       ========================================== -->
   <div id="modal-reserva" class="modal">
     <div class="modal-content">
       <span class="cerrar-modal" onclick="cerrarModalReserva()">&times;</span>
-      <h3>Confirmar Solicitud</h3>
-      <p id="lugar-seleccionado-nombre" class="subtitulo-modal"></p>
+      
+      <!-- Contenedor de la Imagen del Sitio en el Modal -->
+      <div class="modal-imagen-container" style="width: 100%; height: 160px; overflow: hidden; border-radius: 8px; margin-bottom: 15px;">
+        <img id="modal-img-sitio" src="" alt="Imagen del Sitio Turístico" style="width: 100%; height: 100%; object-fit: cover;">
+      </div>
+
+      <h3 class="modal-title" style="color: #1b4332; margin-top: 0;">Confirmar Solicitud de Reserva</h3>
+      <p id="lugar-seleccionado-nombre" class="subtitulo-modal" style="font-weight: 600; color: #2d6a4f; margin-bottom: 15px;"></p>
 
       <form id="form-reserva">
         <input type="hidden" id="lugar">
+        
         <div class="form-group">
           <label for="nombreUsuario">Nombre Completo</label>
           <input type="text" id="nombreUsuario" required placeholder="Tu nombre">
         </div>
+
         <div class="form-group">
           <label for="correo">Correo Electrónico</label>
           <input type="email" id="correo" required placeholder="correo@ejemplo.com">
         </div>
+
         <div class="form-group">
           <label for="telefono">Teléfono</label>
           <input type="tel" id="telefono" required placeholder="3130000000">
         </div>
+
         <div class="form-row">
           <div class="form-group">
             <label for="fechaReserva">Fecha de Reserva</label>
@@ -67,8 +108,21 @@
             <input type="number" id="numeroPersonas" min="1" value="1" required>
           </div>
         </div>
-        <button type="submit" class="btn-confirmar">Enviar Solicitud</button>
+
+        <!-- CAMPO CLAVE: Cabaña, Almuerzo o Comentarios -->
+        <div class="form-group">
+          <label for="comentarioReserva">¿Qué deseas reservar? (Cabaña, almuerzo, detalles...)</label>
+          <textarea id="comentarioReserva" rows="2" placeholder="Ej: Deseo reservar una cabaña y almuerzo típico..." style="padding: 11px 14px; border: 1px solid #ced4da; border-radius: 8px; font-family: inherit; font-size: 0.95rem; resize: none; outline: none;"></textarea>
+        </div>
+
+        <button type="submit" class="btn-confirmar">Enviar Solicitud al Sistema</button>
       </form>
+
+      <!-- Botón de WhatsApp Integrado -->
+      <button type="button" id="btn-whatsapp-reserva" onclick="enviarPorWhatsApp()" style="width: 100%; background-color: #25d366; color: white; border: none; padding: 12px; font-size: 1.05rem; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        💬 Reservar o Consultar por WhatsApp
+      </button>
+
       <div id="mensaje-reserva"></div>
     </div>
   </div>
@@ -77,8 +131,10 @@
     <p>&copy; 2026 TurisPlaY - SENA Ficha 3229944 · Garzón, Huila</p>
   </footer>
 
+  <!-- Notificaciones Flotantes -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Script principal del frontend -->
   <script src="app.js"></script>
-  <!-- Contenedor para notificaciones flotantes (Toast) -->
-<div id="toast" class="toast"></div>
 </body>
 </html>
