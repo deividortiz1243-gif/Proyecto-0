@@ -1,167 +1,198 @@
+
+// ==========================================
+// 1. CONFIGURACIÓN INICIAL
+// ==========================================
+
 require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
-const mongoose = require('mongoose');
 
+// Conexión a MongoDB
+const conectarDB = require('./config/db');
+
+// Modelos
 const Sitio = require('./models/Sitio');
-const Reserva = require('./models/Reserva');
+
+// Middleware
 const { verificarToken } = require('./middleware/auth');
 const verificarAdmin = require('./middleware/admin');
 
+// Rutas modulares
 const authRoutes = require('./routes/auth');
 const turisRoutes = require('./routes/turisplay');
+const reservasRoutes = require('./routes/reservas');
 
+// Crear aplicación Express
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middlewares globales
+
+// ==========================================
+// 2. MIDDLEWARES GLOBALES
+// ==========================================
+
 app.use(cors());
 app.use(express.json());
 
-// Importar rutas modulares
+
+// ==========================================
+// 3. REGISTRO DE RUTAS MODULARES
+// ==========================================
+
 app.use('/api/auth', authRoutes);
 app.use('/api/turisplay', turisRoutes);
+app.use('/api/reservas', reservasRoutes);
+
 
 // ==========================================
-// 1. RUTAS DE SITIOS TURÍSTICOS (CRUD COMPLETO)
+// 4. RUTAS DE SITIOS TURÍSTICOS (CRUD)
 // ==========================================
 
-// GET: Obtener todos los sitios (Pública)
-app.get('/api/sitios', async (req, res) => {
+// GET: Obtener todos los sitios turísticos (Pública)
+
+app.get('/api/sitios', async (req, res, next) => {
   try {
     const sitios = await Sitio.find();
     res.json(sitios);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener los datos de los sitios' });
+    next(error);
   }
 });
 
-// POST: Crear un sitio turístico (Protegida: Solo Admin)
-app.post('/api/sitios', verificarToken, verificarAdmin, async (req, res) => {
+
+// POST: Crear un sitio turístico (Solo administrador)
+
+app.post('/api/sitios', verificarToken, verificarAdmin, async (req, res, next) => {
   try {
     const nuevoSitio = await Sitio.create(req.body);
+
     res.status(201).json(nuevoSitio);
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    next(error);
   }
 });
 
-// PUT: Actualizar un sitio turístico por ID (Protegida: Solo Admin)
-app.put('/api/sitios/:id', verificarToken, verificarAdmin, async (req, res) => {
+
+// PUT: Actualizar un sitio turístico por ID (Solo administrador)
+
+app.put('/api/sitios/:id', verificarToken, verificarAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const sitioActualizado = await Sitio.findByIdAndUpdate(id, req.body, { new: true, runValidators: true });
+
+    const sitioActualizado = await Sitio.findByIdAndUpdate(
+      id,
+      req.body,
+      {
+        new: true,
+        runValidators: true
+      }
+    );
 
     if (!sitioActualizado) {
-      return res.status(404).json({ error: 'Sitio turístico no encontrado para actualizar' });
+      return res.status(404).json({
+        error: 'Sitio turístico no encontrado para actualizar'
+      });
     }
 
     res.json({
       mensaje: 'Sitio turístico actualizado exitosamente',
       sitioActualizado
     });
+
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    next(error);
   }
 });
 
-// DELETE: Eliminar un sitio turístico por ID (Protegida: Solo Admin)
-app.delete('/api/sitios/:id', verificarToken, verificarAdmin, async (req, res) => {
+
+// DELETE: Eliminar un sitio turístico por ID (Solo administrador)
+
+app.delete('/api/sitios/:id', verificarToken, verificarAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
+
     const sitioEliminado = await Sitio.findByIdAndDelete(id);
 
     if (!sitioEliminado) {
-      return res.status(404).json({ error: 'Sitio turístico no encontrado para eliminar' });
+      return res.status(404).json({
+        error: 'Sitio turístico no encontrado para eliminar'
+      });
     }
 
     res.status(200).json({
       mensaje: 'Sitio turístico eliminado exitosamente',
       sitioEliminado
     });
+
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Error al eliminar el sitio turístico', 
-      detalles: error.message 
-    });
+    next(error);
   }
 });
 
-// ==========================================
-// 2. RUTAS DE RESERVAS (CRUD COMPLETO)
-// ==========================================
-
-// GET: Consultar todas las reservas (Protegida: Solo Admin / Usuario con Token)
-app.get('/api/reservas', verificarToken, async (req, res) => {
-  try {
-    const reservas = await Reserva.find().sort({ createdAt: -1 });
-    res.json(reservas);
-  } catch (error) {
-    res.status(500).json({ error: 'Error al consultar reservas' });
-  }
-});
-
-// POST: Crear una reserva (Pública para clientes)
-app.post('/api/reservas', async (req, res) => {
-  try {
-    const nuevaReserva = await Reserva.create(req.body);
-    res.status(201).json({
-      mensaje: 'Reserva registrada exitosamente',
-      reserva: nuevaReserva
-    });
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-});
-
-// PUT: Actualizar estado de una reserva (Protegida: Solo Admin)
-app.put('/api/reservas/:id', verificarToken, verificarAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const reservaActualizada = await Reserva.findByIdAndUpdate(id, req.body, { new: true });
-
-    if (!reservaActualizada) {
-      return res.status(404).json({ error: 'Reserva no encontrada para actualizar' });
-    }
-
-    res.json({
-      mensaje: 'Estado de reserva actualizado correctamente',
-      reservaActualizada
-    });
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-});
 
 // ==========================================
-// 3. RUTAS DE CONTROL Y SALUD DEL SERVIDOR
+// 5. RUTA PRINCIPAL Y SALUD DEL SERVIDOR
 // ==========================================
 
-// Ruta raíz de prueba
+// Ruta raíz
+
 app.get('/', (req, res) => {
-  res.json({ mensaje: 'Servidor TurisPlaY Backend en línea 🚀' });
+  res.json({
+    mensaje: 'Servidor TurisPlaY Backend en línea 🚀'
+  });
 });
 
-// Manejo de rutas inexistentes (404)
+
+// ==========================================
+// 6. RUTA PARA ENDPOINTS NO ENCONTRADOS
+// ==========================================
+
 app.use((req, res) => {
-  res.status(404).json({ error: 'Ruta no encontrada en la API de TurisPlaY' });
+  res.status(404).json({
+    error: 'Ruta no encontrada en la API de TurisPlaY'
+  });
 });
 
+
 // ==========================================
-// 4. CONEXIÓN A MONGODB ATLAS Y PUERTO
+// 7. MANEJADOR CENTRALIZADO DE ERRORES
 // ==========================================
+
+const manejadorErrores = (err, req, res, next) => {
+  console.error('❌ Error interno detectado:', err);
+
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  const statusCode = err.statusCode || 500;
+
+  res.status(statusCode).json({
+    error: err.message || 'Error interno del servidor',
+    timestamp: new Date().toISOString()
+  });
+};
+
+app.use(manejadorErrores);
+
+
+// ==========================================
+// 8. CONEXIÓN A MONGODB Y ARRANQUE
+// ==========================================
+
 const startServer = async () => {
   try {
     console.log('Intentando conectar a MongoDB Atlas...');
-    await mongoose.connect(process.env.MONGODB_URI);
-    
-    console.log('✅ Conectado a MongoDB Atlas con éxito');
-    
+
+    await conectarDB();
+
     app.listen(PORT, () => {
-      console.log(`🚀 Servidor Funcionando en http://localhost:${PORT}`);
+      console.log(`🚀 Servidor funcionando en http://localhost:${PORT}`);
     });
-  } catch (err) {
-    console.error('❌ Error fatal al iniciar el servidor:', err.message);
+
+  } catch (error) {
+    console.error('❌ Error al iniciar el servidor:', error.message);
     process.exit(1);
   }
 };

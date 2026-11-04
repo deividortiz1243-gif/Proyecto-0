@@ -3,7 +3,7 @@ const Reserva = require('../models/Reserva');
 const { verificarToken } = require('../middleware/auth');
 const router = express.Router();
 
-// GET: Obtener reservas del usuario (PROTEGIDA)
+// GET: Obtener todas las reservas (PROTEGIDA)
 router.get('/', verificarToken, async (req, res) => {
   try {
     const reservas = await Reserva.find({ usuario: req.usuario.id })
@@ -16,16 +16,52 @@ router.get('/', verificarToken, async (req, res) => {
   }
 });
 
-// POST: Crear una nueva reserva (PROTEGIDA)
-router.post('/', verificarToken, async (req, res) => {
+// GET: Obtener reserva por ID (PROTEGIDA)
+router.get('/:id', verificarToken, async (req, res) => {
   try {
-    const nuevaReserva = await Reserva.create({
-      ...req.body,
-      usuario: req.usuario.id
-    });
+    const reserva = await Reserva.findById(req.params.id)
+      .populate('usuario', 'nombre email')
+      .populate('sitio', 'nombre municipio');
+    if (!reserva) {
+      return res.status(404).json({ error: 'Reserva no encontrada' });
+    }
+    res.json(reserva);
+  } catch (error) {
+    console.error('❌ Error al consultar la reserva:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// POST: Crear una nueva reserva (Permite frontend público o con token)
+router.post('/', async (req, res) => {
+  try {
+    const datosReserva = { ...req.body };
+    if (req.usuario && req.usuario.id) {
+      datosReserva.usuario = req.usuario.id;
+    }
+
+    const nuevaReserva = await Reserva.create(datosReserva);
     res.status(201).json(nuevaReserva);
   } catch (error) {
     console.error('❌ Error al crear reserva:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// PUT: Actualizar reserva por ID (PROTEGIDA)
+router.put('/:id', verificarToken, async (req, res) => {
+  try {
+    const reservaActualizada = await Reserva.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { returnDocument: 'after' }
+    );
+    if (!reservaActualizada) {
+      return res.status(404).json({ error: 'Reserva no encontrada para actualizar' });
+    }
+    res.json(reservaActualizada);
+  } catch (error) {
+    console.error('❌ Error al actualizar reserva:', error);
     res.status(400).json({ error: error.message });
   }
 });
