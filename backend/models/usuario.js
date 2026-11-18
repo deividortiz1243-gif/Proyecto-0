@@ -6,14 +6,14 @@ const usuarioSchema = new mongoose.Schema({
   // Nombre del usuario
   nombre: {
     type: String,
-    required: true,
+    required: [true, 'El nombre es obligatorio'],
     trim: true
   },
 
   // Correo electrónico
   email: {
     type: String,
-    required: true,
+    required: [true, 'El correo electrónico es obligatorio'],
     unique: true,
     lowercase: true,
     trim: true
@@ -22,7 +22,7 @@ const usuarioSchema = new mongoose.Schema({
   // Contraseña encriptada con bcrypt
   password: {
     type: String,
-    required: true
+    required: [true, 'La contraseña es obligatoria']
   },
 
   // Rol del usuario
@@ -32,13 +32,14 @@ const usuarioSchema = new mongoose.Schema({
     default: 'turista'
   },
 
-  // Ubicación del usuario
+  // Departamento del usuario
   departamento: {
     type: String,
     default: 'Huila',
     trim: true
   },
 
+  // Municipio del usuario
   municipio: {
     type: String,
     default: 'Garzón',

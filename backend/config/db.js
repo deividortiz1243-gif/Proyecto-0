@@ -1,4 +1,3 @@
-
 const mongoose = require('mongoose');
 
 const conectarDB = async () => {
@@ -8,9 +7,8 @@ const conectarDB = async () => {
     }
 
     await mongoose.connect(process.env.MONGODB_URI);
-
     console.log('✅ Conectado a MongoDB Atlas con éxito');
-
+    
   } catch (error) {
     console.error('❌ Error al conectar a MongoDB:', error.message);
     throw error;

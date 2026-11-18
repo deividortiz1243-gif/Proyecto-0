@@ -1,60 +1,154 @@
+
 const express = require('express');
+const mongoose = require('mongoose');
+
 const Sitio = require('../models/Sitio');
 const { verificarToken } = require('../middleware/auth');
 const verificarAdmin = require('../middleware/admin');
+
 const router = express.Router();
 
-// GET: Obtener todos los sitios turísticos (PÚBLICA)
-router.get('/sitios', async (req, res) => {
+// Campos permitidos para crear o actualizar sitios
+const camposPermitidos = [
+  'nombre',
+  'categoria',
+  'descripcion',
+  'ubicacion',
+  'servicios',
+  'imagen'
+];
+
+// GET: Obtener todos los sitios turísticos (PÚBLICO)
+router.get('/sitios', async (req, res, next) => {
   try {
-    const sitios = await Sitio.find();
-    res.json(sitios);
+    const sitios = await Sitio.find().sort({ createdAt: -1 });
+    res.status(200).json(sitios);
   } catch (error) {
-    console.error('❌ Error al obtener sitios:', error);
-    res.status(500).json({ error: 'Error al obtener los datos de la base de datos' });
+    next(error);
   }
 });
 
-// POST: Crear un nuevo sitio turístico (SOLO ADMIN)
-router.post('/sitios', verificarToken, verificarAdmin, async (req, res) => {
+// GET: Obtener un sitio por su ID (PÚBLICO)
+router.get('/sitios/:id', async (req, res, next) => {
   try {
-    const nuevoSitio = await Sitio.create(req.body);
-    res.status(201).json(nuevoSitio);
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        error: 'El ID del sitio no es válido'
+      });
+    }
+
+    const sitio = await Sitio.findById(id);
+
+    if (!sitio) {
+      return res.status(404).json({
+        error: 'Sitio turístico no encontrado'
+      });
+    }
+
+    res.status(200).json(sitio);
   } catch (error) {
-    console.error('❌ Error al crear sitio:', error);
-    res.status(400).json({ error: error.message });
+    next(error);
   }
 });
 
-// PUT: Actualizar un sitio por su _id (SOLO ADMIN)
-router.put('/sitios/:id', verificarToken, verificarAdmin, async (req, res) => {
+// POST: Crear un sitio turístico (SOLO ADMINISTRADOR)
+router.post('/sitios', verificarToken, verificarAdmin, async (req, res, next) => {
   try {
+    const datosSitio = {};
+
+    for (const campo of camposPermitidos) {
+      if (req.body[campo] !== undefined) {
+        datosSitio[campo] = req.body[campo];
+      }
+    }
+
+    const nuevoSitio = await Sitio.create(datosSitio);
+
+    res.status(201).json({
+      mensaje: 'Sitio turístico creado correctamente',
+      sitio: nuevoSitio
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT: Actualizar un sitio turístico (SOLO ADMINISTRADOR)
+router.put('/sitios/:id', verificarToken, verificarAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        error: 'El ID del sitio no es válido'
+      });
+    }
+
+    const datosActualizados = {};
+
+    for (const campo of camposPermitidos) {
+      if (req.body[campo] !== undefined) {
+        datosActualizados[campo] = req.body[campo];
+      }
+    }
+
+    if (Object.keys(datosActualizados).length === 0) {
+      return res.status(400).json({
+        error: 'No se enviaron campos válidos para actualizar'
+      });
+    }
+
     const sitioActualizado = await Sitio.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { returnDocument: 'after' }
+      id,
+      datosActualizados,
+      {
+        new: true,
+        runValidators: true
+      }
     );
+
     if (!sitioActualizado) {
-      return res.status(404).json({ error: 'Sitio turístico no encontrado' });
+      return res.status(404).json({
+        error: 'Sitio turístico no encontrado'
+      });
     }
-    res.json(sitioActualizado);
+
+    res.status(200).json({
+      mensaje: 'Sitio turístico actualizado correctamente',
+      sitio: sitioActualizado
+    });
   } catch (error) {
-    console.error('❌ Error al actualizar sitio:', error);
-    res.status(400).json({ error: error.message });
+    next(error);
   }
 });
 
-// DELETE: Eliminar un sitio por su _id (SOLO ADMIN)
-router.delete('/sitios/:id', verificarToken, verificarAdmin, async (req, res) => {
+// DELETE: Eliminar un sitio turístico (SOLO ADMINISTRADOR)
+router.delete('/sitios/:id', verificarToken, verificarAdmin, async (req, res, next) => {
   try {
-    const sitioEliminado = await Sitio.findByIdAndDelete(req.params.id);
-    if (!sitioEliminado) {
-      return res.status(404).json({ error: 'Sitio turístico no encontrado' });
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        error: 'El ID del sitio no es válido'
+      });
     }
-    res.json({ mensaje: 'Sitio eliminado correctamente de TurisPlaY', sitioEliminado });
+
+    const sitioEliminado = await Sitio.findByIdAndDelete(id);
+
+    if (!sitioEliminado) {
+      return res.status(404).json({
+        error: 'Sitio turístico no encontrado'
+      });
+    }
+
+    res.status(200).json({
+      mensaje: 'Sitio turístico eliminado correctamente',
+      sitio: sitioEliminado
+    });
   } catch (error) {
-    console.error('❌ Error al eliminar sitio:', error);
-    res.status(400).json({ error: error.message });
+    next(error);
   }
 });
 

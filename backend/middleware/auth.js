@@ -1,4 +1,3 @@
-
 const jwt = require('jsonwebtoken');
 
 // ==========================================
@@ -6,9 +5,7 @@ const jwt = require('jsonwebtoken');
 // ==========================================
 
 function verificarToken(req, res, next) {
-
     const authHeader = req.headers.authorization;
-
     // Comprobar que exista el encabezado Bearer
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({
@@ -28,14 +25,10 @@ function verificarToken(req, res, next) {
     }
 
     try {
-
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
         // Guardar los datos del usuario autenticado
         req.usuario = decoded;
-
         next();
-
     } catch (error) {
 
         return res.status(403).json({
@@ -56,7 +49,7 @@ function esAdmin(req, res, next) {
             error: 'Usuario no autenticado'
         });
     }
-
+    
     if (
         req.usuario.rol !== 'admin' &&
         req.usuario.rol !== 'administrador'
@@ -65,7 +58,6 @@ function esAdmin(req, res, next) {
             error: 'Acceso denegado: Se requieren permisos de administrador'
         });
     }
-
     next();
 }
 

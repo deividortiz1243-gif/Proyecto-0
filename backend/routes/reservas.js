@@ -5,40 +5,45 @@ const mongoose = require('mongoose');
 const router = express.Router();
 
 const Reserva = require('../models/Reserva');
+const Sitio = require('../models/Sitio');
 const { verificarToken } = require('../middleware/auth');
 const verificarAdmin = require('../middleware/admin');
 
-// Obtener reservas del usuario autenticado.
-// Los administradores pueden consultar todas.
+// Comprobar si el usuario es administrador
+const esAdministrador = (usuario) => {
+  return ['admin', 'administrador'].includes(usuario.rol);
+};
+
+// ==========================================
+// 1. OBTENER RESERVAS
+// ==========================================
+
 router.get('/', verificarToken, async (req, res, next) => {
   try {
-    let reservas;
+    let filtro = {};
 
-    if (
-      req.usuario.rol === 'admin' ||
-      req.usuario.rol === 'administrador'
-    ) {
-      reservas = await Reserva.find()
-        .populate('usuario', 'nombre email')
-        .populate('sitio', 'nombre municipio')
-        .sort({ createdAt: -1 });
-    } else {
-      reservas = await Reserva.find({
-        usuario: req.usuario.id
-      })
-        .populate('usuario', 'nombre email')
-        .populate('sitio', 'nombre municipio')
-        .sort({ createdAt: -1 });
+    // Los turistas solamente consultan sus reservas.
+    // Los administradores pueden consultar todas.
+    if (!esAdministrador(req.usuario)) {
+      filtro.usuario = req.usuario.id;
     }
 
-    res.json(reservas);
+    const reservas = await Reserva.find(filtro)
+      .populate('usuario', 'nombre email')
+      .populate('sitio', 'nombre ubicacion')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json(reservas);
 
   } catch (error) {
     next(error);
   }
 });
 
-// Consultar una reserva específica.
+// ==========================================
+// 2. OBTENER UNA RESERVA POR ID
+// ==========================================
+
 router.get('/:id', verificarToken, async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -49,19 +54,15 @@ router.get('/:id', verificarToken, async (req, res, next) => {
       });
     }
 
-    const esAdmin = ['admin', 'administrador'].includes(
-      req.usuario.rol
-    );
-
     const filtro = { _id: id };
 
-    if (!esAdmin) {
+    if (!esAdministrador(req.usuario)) {
       filtro.usuario = req.usuario.id;
     }
 
     const reserva = await Reserva.findOne(filtro)
       .populate('usuario', 'nombre email')
-      .populate('sitio', 'nombre municipio');
+      .populate('sitio', 'nombre ubicacion');
 
     if (!reserva) {
       return res.status(404).json({
@@ -69,39 +70,54 @@ router.get('/:id', verificarToken, async (req, res, next) => {
       });
     }
 
-    res.json(reserva);
+    res.status(200).json(reserva);
 
   } catch (error) {
     next(error);
   }
 });
 
-// Crear una reserva.
+// ==========================================
+// 3. CREAR UNA RESERVA
+// ==========================================
+
 router.post('/', verificarToken, async (req, res, next) => {
   try {
     const { sitio, fecha, cantidadPersonas } = req.body;
 
-    if (!sitio || !fecha || !cantidadPersonas) {
+    // Validar campos obligatorios
+    if (!sitio || !fecha || cantidadPersonas === undefined) {
       return res.status(400).json({
         error: 'Debes proporcionar sitio, fecha y cantidad de personas'
       });
     }
 
+    // Validar ID del sitio
     if (!mongoose.isValidObjectId(sitio)) {
       return res.status(400).json({
         error: 'El identificador del sitio no es válido'
       });
     }
 
-    if (
-      !Number.isInteger(Number(cantidadPersonas)) ||
-      Number(cantidadPersonas) < 1
-    ) {
-      return res.status(400).json({
-        error: 'La cantidad de personas debe ser un número entero mayor que cero'
+    // Comprobar que el sitio exista
+    const sitioExiste = await Sitio.findById(sitio);
+
+    if (!sitioExiste) {
+      return res.status(404).json({
+        error: 'El sitio turístico no existe'
       });
     }
 
+    // Validar cantidad de personas
+    const cantidad = Number(cantidadPersonas);
+
+    if (!Number.isInteger(cantidad) || cantidad < 1) {
+      return res.status(400).json({
+        error: 'La cantidad de personas debe ser un entero mayor que cero'
+      });
+    }
+
+    // Validar fecha
     const fechaReserva = new Date(fecha);
 
     if (Number.isNaN(fechaReserva.getTime())) {
@@ -110,16 +126,23 @@ router.post('/', verificarToken, async (req, res, next) => {
       });
     }
 
+    // Crear reserva con el usuario autenticado.
+    // No se acepta un usuario enviado desde el frontend.
     const nuevaReserva = await Reserva.create({
       usuario: req.usuario.id,
       sitio,
       fecha: fechaReserva,
-      cantidadPersonas: Number(cantidadPersonas)
+      cantidadPersonas: cantidad,
+      estado: 'pendiente'
     });
+
+    const reservaCompleta = await Reserva.findById(nuevaReserva._id)
+      .populate('usuario', 'nombre email')
+      .populate('sitio', 'nombre ubicacion');
 
     res.status(201).json({
       mensaje: 'Reserva realizada con éxito en TurisPlaY',
-      reserva: nuevaReserva
+      reserva: reservaCompleta
     });
 
   } catch (error) {
@@ -127,7 +150,10 @@ router.post('/', verificarToken, async (req, res, next) => {
   }
 });
 
-// Actualizar una reserva.
+// ==========================================
+// 4. ACTUALIZAR UNA RESERVA
+// ==========================================
+
 router.put('/:id', verificarToken, async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -138,9 +164,7 @@ router.put('/:id', verificarToken, async (req, res, next) => {
       });
     }
 
-    const esAdmin = ['admin', 'administrador'].includes(
-      req.usuario.rol
-    );
+    const esAdmin = esAdministrador(req.usuario);
 
     const filtro = { _id: id };
 
@@ -148,10 +172,9 @@ router.put('/:id', verificarToken, async (req, res, next) => {
       filtro.usuario = req.usuario.id;
     }
 
-    // No permitir cambiar el propietario ni modificar el estado
-    // directamente desde la cuenta de un turista.
     const datosActualizados = {};
 
+    // Actualizar fecha
     if (req.body.fecha !== undefined) {
       const fecha = new Date(req.body.fecha);
 
@@ -164,27 +187,46 @@ router.put('/:id', verificarToken, async (req, res, next) => {
       datosActualizados.fecha = fecha;
     }
 
+    // Actualizar cantidad de personas
     if (req.body.cantidadPersonas !== undefined) {
       const cantidad = Number(req.body.cantidadPersonas);
 
       if (!Number.isInteger(cantidad) || cantidad < 1) {
         return res.status(400).json({
-          error: 'La cantidad de personas debe ser un entero mayor que cero'
+          error: 'La cantidad debe ser un entero mayor que cero'
         });
       }
 
       datosActualizados.cantidadPersonas = cantidad;
     }
 
+    // Solo el administrador puede modificar el estado
     if (esAdmin && req.body.estado !== undefined) {
+      if (!['pendiente', 'confirmada', 'cancelada'].includes(req.body.estado)) {
+        return res.status(400).json({
+          error: 'El estado de la reserva no es válido'
+        });
+      }
+
       datosActualizados.estado = req.body.estado;
+    }
+
+    if (Object.keys(datosActualizados).length === 0) {
+      return res.status(400).json({
+        error: 'No se enviaron datos válidos para actualizar'
+      });
     }
 
     const reservaActualizada = await Reserva.findOneAndUpdate(
       filtro,
       { $set: datosActualizados },
-      { new: true, runValidators: true }
-    );
+      {
+        new: true,
+        runValidators: true
+      }
+    )
+      .populate('usuario', 'nombre email')
+      .populate('sitio', 'nombre ubicacion');
 
     if (!reservaActualizada) {
       return res.status(404).json({
@@ -192,7 +234,7 @@ router.put('/:id', verificarToken, async (req, res, next) => {
       });
     }
 
-    res.json({
+    res.status(200).json({
       mensaje: 'Reserva actualizada correctamente',
       reserva: reservaActualizada
     });
@@ -202,10 +244,11 @@ router.put('/:id', verificarToken, async (req, res, next) => {
   }
 });
 
-// Cancelar o eliminar una reserva.
-// Los turistas solo pueden cancelar las suyas.
-// Los administradores pueden eliminar cualquiera.
-router.delete('/:id', verificarToken, async (req, res, next) => {
+// ==========================================
+// 5. CANCELAR UNA RESERVA
+// ==========================================
+
+router.patch('/:id/cancelar', verificarToken, async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -215,17 +258,55 @@ router.delete('/:id', verificarToken, async (req, res, next) => {
       });
     }
 
-    const esAdmin = ['admin', 'administrador'].includes(
-      req.usuario.rol
-    );
-
     const filtro = { _id: id };
 
-    if (!esAdmin) {
+    if (!esAdministrador(req.usuario)) {
       filtro.usuario = req.usuario.id;
     }
 
-    const reservaEliminada = await Reserva.findOneAndDelete(filtro);
+    const reserva = await Reserva.findOne(filtro);
+
+    if (!reserva) {
+      return res.status(404).json({
+        error: 'Reserva no encontrada'
+      });
+    }
+
+    if (reserva.estado === 'cancelada') {
+      return res.status(400).json({
+        error: 'Esta reserva ya está cancelada'
+      });
+    }
+
+    reserva.estado = 'cancelada';
+
+    await reserva.save();
+
+    res.status(200).json({
+      mensaje: 'Reserva cancelada correctamente',
+      reserva
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ==========================================
+// 6. ELIMINAR UNA RESERVA (SOLO ADMIN)
+// ==========================================
+
+router.delete('/:id', verificarToken, verificarAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        error: 'El identificador de la reserva no es válido'
+      });
+    }
+
+    const reservaEliminada = await Reserva.findByIdAndDelete(id);
 
     if (!reservaEliminada) {
       return res.status(404).json({
@@ -233,7 +314,7 @@ router.delete('/:id', verificarToken, async (req, res, next) => {
       });
     }
 
-    res.json({
+    res.status(200).json({
       mensaje: 'Reserva eliminada correctamente',
       reserva: reservaEliminada
     });
@@ -242,5 +323,9 @@ router.delete('/:id', verificarToken, async (req, res, next) => {
     next(error);
   }
 });
+
+// ==========================================
+// 7. EXPORTAR RUTAS
+// ==========================================
 
 module.exports = router;
